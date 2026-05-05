@@ -1,0 +1,29 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidFamilyMember(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.role is string &&
+             data.status in ['alive', 'deceased'] &&
+             data.type in ['adult', 'child'] &&
+             data.generation is number;
+    }
+
+    match /familyMembers/{memberId} {
+      allow read: if true; 
+      // For this app, we allow anyone signed in (anonymous is used) to write. 
+      // In a real production app, we would restrict this to specific UIDs.
+      allow create, update, delete: if isSignedIn() && isValidFamilyMember(request.resource.data);
+    }
+  }
+}

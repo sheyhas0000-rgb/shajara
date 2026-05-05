@@ -1,0 +1,27 @@
+{
+  "entities": {
+    "FamilyMember": {
+      "title": "Family Member",
+      "description": "A member of the Rahmatullayev family tree",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "years": { "type": "string" },
+        "status": { "type": "string", "enum": ["alive", "deceased"] },
+        "role": { "type": "string" },
+        "type": { "type": "string", "enum": ["adult", "child"] },
+        "parentId": { "type": "string" },
+        "generation": { "type": "number" },
+        "order": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "role", "status", "type", "generation"]
+    }
+  },
+  "firestore": {
+    "familyMembers": {
+      "schema": "FamilyMember",
+      "description": "Collection of family members"
+    }
+  }
+}

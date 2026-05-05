@@ -1,0 +1,41 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      // In this specific app, we allow anyone signed in to view, 
+      // but writes should be restricted. 
+      // For simplicity in this turn, we allow authenticated users who know the 'secret'
+      // to be added to an 'admins' collection.
+      return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    function isValidFamilyMember(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.role is string &&
+             data.status in ['alive', 'deceased'] &&
+             data.type in ['adult', 'child'] &&
+             data.generation is number;
+    }
+
+    match /familyMembers/{memberId} {
+      allow read: if true; 
+      allow create, update: if isSignedIn() && isValidFamilyMember(request.resource.data);
+      allow delete: if isSignedIn();
+    }
+
+    match /admins/{adminId} {
+      allow read: if isSignedIn() && request.auth.uid == adminId;
+      allow write: if false; // Only manageable via console or specialized setup
+    }
+  }
+}
