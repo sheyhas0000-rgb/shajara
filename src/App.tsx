@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { User, Plus, LogIn, Lock, Trash2, ChevronUp, ChevronDown, TreeDeciduous, Heart } from 'lucide-react';
+import { User, Plus, LogIn, Lock, Trash2, ChevronUp, ChevronDown, TreeDeciduous, Heart, Pencil } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   collection, 
@@ -12,7 +12,7 @@ import {
   orderBy, 
   serverTimestamp
 } from 'firebase/firestore';
-import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged } from 'firebase/auth';
 import { db, auth } from './lib/firebase';
 
 // --- Types ---
@@ -115,7 +115,7 @@ const TreeCard = ({
             onClick={() => onEdit(member)}
             className="p-1.5 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded bg-white shadow-sm border border-blue-100"
           >
-            <Plus size={12} className="rotate-45" /> {/* Using Plus as Edit substitute or just Edit icon */}
+            <Pencil size={12} />
           </button>
         </div>
       )}
@@ -150,7 +150,11 @@ export default function App() {
   const [showLogin, setShowLogin] = useState(false);
   const [password, setPassword] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [showAddForm, setShowAddForm] = useState<{ parentId: string | null; generation: number } | null>(null);
+  const [showAddForm, setShowAddForm] = useState<{ 
+    parentId: string | null; 
+    generation: number;
+    targetChildId?: string;
+  } | null>(null);
   const [newMember, setNewMember] = useState({
     name: "",
     years: "",
@@ -173,19 +177,27 @@ export default function App() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
-        // User is signed in anonymously
-      } else {
-        signInAnonymously(auth).catch(e => console.error("Auth error:", e));
+        // User logged in
       }
     });
     return () => unsubscribe();
   }, []);
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (password === "1111") {
-      setIsAdmin(true);
-      setShowLogin(false);
-      setPassword("");
+      try {
+        const provider = new GoogleAuthProvider();
+        await signInWithPopup(auth, provider);
+        setIsAdmin(true);
+        setShowLogin(false);
+        setPassword("");
+      } catch (e: any) {
+        if (e.code === 'auth/popup-blocked') {
+          alert("Iltimos, popup oynani ochishga ruxsat bering (bloklangan).");
+        } else {
+          alert("Xato: " + e.message);
+        }
+      }
     } else {
       alert("Xato parol!");
     }
@@ -200,18 +212,26 @@ export default function App() {
           ...newMember
         });
       } else {
-        await addDoc(collection(db, "familyMembers"), {
+        const docRef = await addDoc(collection(db, "familyMembers"), {
           ...newMember,
           parentId: showAddForm?.parentId || null,
           generation: showAddForm?.generation || 0,
           createdAt: serverTimestamp()
         });
+
+        // If we were adding a parent to an existing member (Add Ancestor)
+        if (showAddForm?.targetChildId) {
+          await updateDoc(doc(db, "familyMembers", showAddForm.targetChildId), {
+            parentId: docRef.id
+          });
+        }
       }
       setShowAddForm(null);
       setEditingId(null);
       setNewMember({ name: "", years: "", status: 'alive', role: "", type: 'adult' });
     } catch (e) {
       console.error("Save error:", e);
+      alert("Saqlashda xato yuz berdi: " + (e instanceof Error ? e.message : "Noma'lum xato"));
     }
   };
 
@@ -325,8 +345,8 @@ export default function App() {
               <TreeCard 
                 member={member} 
                 isAdmin={isAdmin}
-                onAddSub={(id, gen) => setShowAddForm({ parentId: id, generation: gen })}
-                onAddParent={(id, gen) => setShowAddForm({ parentId: null, generation: gen })} 
+                onAddSub={(id, gen) => setShowAddForm({ parentId: id, generation: gen + 1 })}
+                onAddParent={(id, gen) => setShowAddForm({ parentId: null, generation: gen - 1, targetChildId: id })} 
                 onEdit={handleEdit}
                 onDelete={handleDelete}
                 delay={idx * 0.1}
@@ -373,8 +393,9 @@ export default function App() {
       </header>
 
       {/* Main Tree Canvas */}
-      <main className="relative flex-grow flex flex-col items-center gap-12 w-full max-w-7xl pb-40 z-20">
-        {members.length === 0 ? (
+      <main className="relative flex-grow flex flex-col items-center gap-12 w-full max-w-full pb-40 z-20 overflow-x-auto overflow-y-visible px-4">
+        <div className="min-w-max flex flex-col items-center">
+          {members.length === 0 ? (
           <div className="flex flex-col items-center gap-6 text-slate-300 mt-20">
             <div className="relative">
                <TreeDeciduous size={120} strokeWidth={0.5} className="text-emerald-100" />
@@ -411,8 +432,8 @@ export default function App() {
                 <TreeCard 
                   member={root} 
                   isAdmin={isAdmin}
-                  onAddSub={(id, gen) => setShowAddForm({ parentId: id, generation: gen })}
-                  onAddParent={(id, gen) => setShowAddForm({ parentId: null, generation: gen })}
+                  onAddSub={(id, gen) => setShowAddForm({ parentId: id, generation: gen + 1 })}
+                  onAddParent={(id, gen) => setShowAddForm({ parentId: null, generation: gen - 1, targetChildId: id })}
                   onEdit={handleEdit}
                   onDelete={handleDelete}
                 />
@@ -421,6 +442,7 @@ export default function App() {
             ))}
           </div>
         )}
+        </div>
       </main>
 
       {/* Admin Controls */}

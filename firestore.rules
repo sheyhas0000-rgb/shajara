@@ -12,18 +12,18 @@ service cloud.firestore {
     }
 
     function isValidFamilyMember(data) {
-      return data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+      return data.name is string && data.name.size() > 0 &&
              data.role is string &&
              data.status in ['alive', 'deceased'] &&
              data.type in ['adult', 'child'] &&
-             data.generation is number;
+             data.generation is number &&
+             (data.parentId == null || data.parentId is string);
     }
 
     match /familyMembers/{memberId} {
       allow read: if true; 
-      // For this app, we allow anyone signed in (anonymous is used) to write. 
-      // In a real production app, we would restrict this to specific UIDs.
-      allow create, update, delete: if isSignedIn() && isValidFamilyMember(request.resource.data);
+      allow create, update: if isSignedIn() && isValidFamilyMember(request.resource.data);
+      allow delete: if isSignedIn();
     }
   }
 }
